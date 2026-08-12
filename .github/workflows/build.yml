@@ -105,6 +105,19 @@ jobs:
           echo "✅ Project root langsung dikunci di: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
+          echo ""
+          echo "=== Pastikan SEMUA file gradlew executable & readable (Manut Mode Permission Fix) ==="
+          # FIX: Zip yang di-upload user (lewat Windows/Explorer/tool tertentu, atau
+          # gara-gara adm-zip pas nyimpen attr executable-nya di sisi bot) sering
+          # bikin `gradlew` ke-extract dengan permission ANEH (misal 000, gak bisa
+          # dibaca sama sekali) meski keliatannya "executable" di attr zip. `chmod +x`
+          # doang gak cukup buat kasus ini karena dia cuma NAMBAH bit execute, gak
+          # nyentuh bit read -- hasilnya jadi --x--x--x (bisa dieksekusi tapi gak bisa
+          # dibaca), makanya shell gagal buka file & keluar "Permission denied".
+          # chmod 755 di sini set permission FULL dari nol (rwxr-xr-x), gak peduli
+          # separah apapun permission asli hasil extract-nya.
+          find project_raw -name "gradlew" -exec chmod 755 {} \;
+
       # =========================
       # JAVA
       # =========================
@@ -208,7 +221,7 @@ jobs:
             
             GRADLE_DIR=$(dirname "$GRADLE_PATH")
             cd "$GRADLE_DIR"
-            chmod +x gradlew
+            chmod 755 gradlew
             
             echo "🚀 Membakar APK menggunakan Gradle Native..."
             if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
@@ -255,4 +268,3 @@ jobs:
           path: ${{ env.APK_PATH }}
           retention-days: 1
           if-no-files-found: error
-          
