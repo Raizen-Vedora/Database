@@ -1,0 +1,105 @@
+name: Flutter Build - Force Clean
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          channel: 'stable'
+
+      - name: Remove all caches and build artifacts
+        run: |
+          echo "Removing all cache and build directories..."
+          rm -rf ~/.gradle
+          rm -rf ~/.m2
+          rm -rf build/
+          rm -rf android/build/
+          rm -rf .dart_tool/
+          rm -rf pubspec.lock
+          rm -rf ios/Pods/
+          rm -rf ios/Podfile.lock
+          rm -rf .pub-cache/
+          echo "Cache cleanup complete"
+
+      - name: Flutter version check
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Get fresh dependencies
+        run: |
+          echo "Getting fresh dependencies..."
+          flutter pub get --verbose
+          echo "Dependencies retrieved"
+
+      - name: Flutter clean
+        run: |
+          echo "Running flutter clean..."
+          flutter clean -v
+          echo "Clean complete"
+
+      - name: Analyze code
+        run: flutter analyze --no-fatal-infos
+        continue-on-error: true
+
+      - name: Check Dart files
+        run: |
+          echo "Checking Dart files..."
+          find lib -name "*.dart" | head -20
+
+      - name: Build APK (Release)
+        run: |
+          echo "Starting APK build..."
+          flutter build apk --release --verbose 2>&1 | tee build.log
+          echo "Build completed"
+
+      - name: Verify APK exists
+        run: |
+          if [ -f build/app/outputs/apk/release/app-release.apk ]; then
+            echo "✅ APK FOUND"
+            ls -lh build/app/outputs/apk/release/app-release.apk
+          else
+            echo "❌ APK NOT FOUND"
+            echo "Checking build directory..."
+            find build -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No APK files found"
+            exit 1
+          fi
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.apk
+          path: build/app/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-failure-log
+          path: build.log
+          retention-days: 7
